@@ -1,6 +1,8 @@
 package tcp
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestProxy(t *testing.T) {
 
