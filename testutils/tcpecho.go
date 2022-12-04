@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"sync"
 )
 
@@ -13,22 +12,22 @@ func echo(conn net.Conn) {
 	r := bufio.NewReader(conn)
 	for {
 		line, err := r.ReadBytes(byte('\n'))
-		switch err {
-		case nil:
-			break
-		case io.EOF:
-		default:
-			fmt.Println("ERROR", err)
+		if err != nil {
+			if err != io.EOF {
+				fmt.Println("failed to read data, err:", err)
+			}
+			return
 		}
+
 		conn.Write(line)
 	}
 }
 
-func TcpEchoServer(addr string, connChan chan net.Conn) {
+func TcpEchoServer(addr string, connChan chan net.Conn) (net.Listener, error) {
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		fmt.Println("ERROR", err)
-		os.Exit(1)
+		return nil, err
 	}
 
 	wg := &sync.WaitGroup{}
@@ -39,11 +38,14 @@ func TcpEchoServer(addr string, connChan chan net.Conn) {
 			conn, err := l.Accept()
 			if err != nil {
 				fmt.Println("ERROR", err)
-				continue
+				return
 			}
-			connChan <- conn
+			if connChan != nil {
+				connChan <- conn
+			}
 			go echo(conn)
 		}
 	}(wg)
 	wg.Wait()
+	return l, nil
 }
