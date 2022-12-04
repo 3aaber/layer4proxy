@@ -8,12 +8,12 @@ import (
 	"os"
 )
 
-func TcpClient(addr string, request chan []byte, serverResponse chan []byte) {
+func TcpClient(addr string, request chan []byte, serverResponse chan []byte) (net.Conn, error) {
 
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		fmt.Println("ERROR", err)
-		os.Exit(1)
+		return nil, err
 	}
 
 	response := bufio.NewReader(conn)
@@ -35,4 +35,5 @@ func TcpClient(addr string, request chan []byte, serverResponse chan []byte) {
 			os.Exit(2)
 		}
 	}
+	return conn, nil
 }

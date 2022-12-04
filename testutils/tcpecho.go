@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"sync"
 )
 
 func echo(conn net.Conn) {
@@ -30,13 +31,19 @@ func TcpEchoServer(addr string, connChan chan net.Conn) {
 		os.Exit(1)
 	}
 
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			fmt.Println("ERROR", err)
-			continue
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func(wg *sync.WaitGroup) {
+		wg.Done()
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				fmt.Println("ERROR", err)
+				continue
+			}
+			connChan <- conn
+			go echo(conn)
 		}
-		connChan <- conn
-		go echo(conn)
-	}
+	}(wg)
+	wg.Wait()
 }
