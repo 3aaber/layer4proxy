@@ -4,6 +4,7 @@ import (
 	"layer4proxy/testutils"
 	"net"
 	"testing"
+	"time"
 )
 
 func getConnections(addr string) error {
@@ -19,30 +20,46 @@ func TestProxy(t *testing.T) {
 	// client --> proxy --> upstream
 	// client <-- proxy <-- upstream
 
-	var addr string
+	upatreamAddress := "127.0.0.1:9000"
+	proxyAddress := "127.0.0.1:9001"
+
 	request := make(chan []byte)
 	response := make(chan []byte)
 
-	upstream := make(chan net.Conn)
-	u, err := testutils.TcpEchoServer(addr, upstream)
+	// Upstream Server
+	upstreamServer := make(chan net.Conn)
+	u, err := testutils.TcpEchoServer(upatreamAddress, upstreamServer)
 	if err != nil || u == nil {
 		t.Error(err)
 		return
 	}
 
-	proxy := make(chan net.Conn)
-	p, err := testutils.TcpServer(addr, proxy)
+	// Proxy Server
+	proxyServer := make(chan net.Conn)
+	p, err := testutils.TcpServer(proxyAddress, proxyServer)
 	if err != nil || p == nil {
 		t.Error(err)
 		return
 	}
 
-	client, err := testutils.TcpClient(addr, request, response)
-	if err != nil || client == nil {
+	// Proxy Client that connect to upstream
+	proxyClient, err := testutils.TcpClient(upatreamAddress, request, response)
+	if err != nil || proxyClient == nil {
 		t.Error(err)
 		return
 	}
 
+	// User Client that connect to proxy
+	userClient, err := testutils.TcpClient(proxyAddress, request, response)
+	if err != nil || userClient == nil {
+		t.Error(err)
+		return
+	}
+
+	from := <-proxyServer
+
+	proxy(proxyClient, from, time.Second*1)
+	proxy(from, proxyClient, time.Second*1)
 }
 
 func TestCopy(t *testing.T) {
