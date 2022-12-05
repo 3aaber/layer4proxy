@@ -57,8 +57,8 @@ func TestProxy(t *testing.T) {
 	proxyServer := <-proxyServerConnectionChannel
 
 	// Proxy TO <--> FROM
-	proxy(proxyClient, proxyServer, time.Second*100)
-	proxy(proxyServer, proxyClient, time.Second*100)
+	rwChannel_1 := proxy(proxyClient, proxyServer, time.Second*100)
+	rwChannel_2 := proxy(proxyServer, proxyClient, time.Second*100)
 
 	// Send Message from client to Proxy
 	requestP <- testMessage
@@ -70,6 +70,8 @@ func TestProxy(t *testing.T) {
 		t.Errorf("Sent Recieved Message Missmatch , %s , %s", string(testMessage), string(resp))
 	}
 
+	fmt.Printf("%#v\n", <-rwChannel_1)
+	fmt.Printf("%#v\n", <-rwChannel_2)
 	fmt.Println(string(resp))
 
 }

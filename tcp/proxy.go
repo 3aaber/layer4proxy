@@ -32,9 +32,13 @@ func proxy(to net.Conn, from net.Conn, timeout time.Duration) <-chan core.ReadWr
 	ticker := time.NewTicker(PROXY_STATS_PUSH_INTERVAL)
 	flushed := false
 
+	addr, ok := to.RemoteAddr().(*net.TCPAddr)
+	if ok {
+		fmt.Println(addr)
+	}
+
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-
 	// Stats collecting goroutine
 	go func(wg *sync.WaitGroup) {
 		wg.Done()
@@ -59,6 +63,9 @@ func proxy(to net.Conn, from net.Conn, timeout time.Duration) <-chan core.ReadWr
 					close(outStats)
 					return
 				}
+
+				rwc.Target.Host = addr.IP.String()
+				rwc.Target.Port = fmt.Sprintf("%d", addr.Port)
 
 				if timeout > 0 && rwc.CountRead > 0 {
 					from.SetReadDeadline(time.Now().Add(timeout))
@@ -115,7 +122,14 @@ func copy(to io.Writer, from io.Reader, ch chan<- core.ReadWriteCount) error {
 			writeN, writeErr := to.Write(buf[0:readN])
 
 			if writeN > 0 {
-				ch <- core.ReadWriteCount{CountRead: uint(readN), CountWrite: uint(writeN)}
+				ch <- core.ReadWriteCount{
+					CountRead:  uint(readN),
+					CountWrite: uint(writeN),
+					Target: core.Upstream{
+						Host: "",
+						Port: "",
+					},
+				}
 			}
 
 			if writeErr != nil {
