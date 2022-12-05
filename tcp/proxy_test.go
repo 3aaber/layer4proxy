@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"fmt"
 	"layer4proxy/testutils"
 	"net"
 	"testing"
@@ -23,12 +24,15 @@ func TestProxy(t *testing.T) {
 	upatreamAddress := "127.0.0.1:9000"
 	proxyAddress := "127.0.0.1:9001"
 
-	request := make(chan []byte)
-	response := make(chan []byte)
+	requestC := make(chan []byte)
+	responseC := make(chan []byte)
+
+	requestP := make(chan []byte)
+	responseP := make(chan []byte)
 
 	// Upstream Server
-	upstreamServer := make(chan net.Conn)
-	u, err := testutils.TcpEchoServer(upatreamAddress, upstreamServer)
+	// upstreamServer := make(chan net.Conn)
+	u, err := testutils.TcpEchoServer(upatreamAddress, nil)
 	if err != nil || u == nil {
 		t.Error(err)
 		return
@@ -43,14 +47,14 @@ func TestProxy(t *testing.T) {
 	}
 
 	// Proxy Client that connect to upstream
-	proxyClient, err := testutils.TcpClient(upatreamAddress, request, response)
+	proxyClient, err := testutils.TcpClient(upatreamAddress, requestC, responseC)
 	if err != nil || proxyClient == nil {
 		t.Error(err)
 		return
 	}
 
 	// User Client that connect to proxy
-	userClient, err := testutils.TcpClient(proxyAddress, request, response)
+	userClient, err := testutils.TcpClient(proxyAddress, requestP, responseP)
 	if err != nil || userClient == nil {
 		t.Error(err)
 		return
@@ -58,8 +62,13 @@ func TestProxy(t *testing.T) {
 
 	from := <-proxyServer
 
-	proxy(proxyClient, from, time.Second*1)
-	proxy(from, proxyClient, time.Second*1)
+	proxy(proxyClient, from, time.Second*100)
+	proxy(from, proxyClient, time.Second*100)
+
+	requestP <- []byte("This is Test \n")
+	resp := <-responseP
+	fmt.Println(string(resp))
+
 }
 
 func TestCopy(t *testing.T) {

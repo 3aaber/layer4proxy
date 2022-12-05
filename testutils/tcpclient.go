@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 )
 
 func TcpClient(addr string, request chan []byte, serverResponse chan []byte) (net.Conn, error) {
@@ -18,6 +19,8 @@ func TcpClient(addr string, request chan []byte, serverResponse chan []byte) (ne
 	}
 
 	response := bufio.NewReader(conn)
+
+	conn.SetReadDeadline(time.Now().Add(time.Second * 100))
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -38,7 +41,7 @@ func TcpClient(addr string, request chan []byte, serverResponse chan []byte) (ne
 				os.Exit(0)
 			default:
 				fmt.Println("ERROR", err)
-				os.Exit(2)
+				// os.Exit(2)
 			}
 		}
 	}(wg)

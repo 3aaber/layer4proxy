@@ -1,12 +1,13 @@
 package tcp
 
 import (
+	"fmt"
 	"io"
 	"net"
+	"sync"
 	"time"
 
 	"layer4proxy/core"
-	"layer4proxy/logging"
 )
 
 const (
@@ -22,7 +23,7 @@ const (
 // dropping connection if timeout exceeded
 func proxy(to net.Conn, from net.Conn, timeout time.Duration) <-chan core.ReadWriteCount {
 
-	log := logging.For("proxy")
+	// log := logging.For("proxy")
 
 	stats := make(chan core.ReadWriteCount)
 	outStats := make(chan core.ReadWriteCount)
@@ -31,9 +32,12 @@ func proxy(to net.Conn, from net.Conn, timeout time.Duration) <-chan core.ReadWr
 	ticker := time.NewTicker(PROXY_STATS_PUSH_INTERVAL)
 	flushed := false
 
-	// Stats collecting goroutine
-	go func() {
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 
+	// Stats collecting goroutine
+	go func(wg *sync.WaitGroup) {
+		wg.Done()
 		if timeout > 0 {
 			from.SetReadDeadline(time.Now().Add(timeout))
 		}
@@ -71,15 +75,19 @@ func proxy(to net.Conn, from net.Conn, timeout time.Duration) <-chan core.ReadWr
 				flushed = false
 			}
 		}
-	}()
+	}(wg)
+	wg.Wait()
 
+	wg.Add(1)
 	// Run proxy copier
-	go func() {
+	go func(wg *sync.WaitGroup) {
+		wg.Done()
 		err := copy(to, from, stats)
 		// hack to determine normal close. TODO: fix when it will be exposed in golang
 		e, ok := err.(*net.OpError)
 		if err != nil && (!ok || e.Err.Error() != "use of closed network connection") {
-			log.Warn(err)
+
+			fmt.Printf("ERROR: %s\n", err.Error())
 		}
 
 		to.Close()
@@ -87,7 +95,8 @@ func proxy(to net.Conn, from net.Conn, timeout time.Duration) <-chan core.ReadWr
 
 		// Stop stats collecting goroutine
 		close(stats)
-	}()
+	}(wg)
+	wg.Wait()
 
 	return outStats
 }
@@ -124,10 +133,10 @@ func copy(to io.Writer, from io.Reader, ch chan<- core.ReadWriteCount) error {
 			break
 		}
 
-		if readErr != nil {
-			err = readErr
-			break
-		}
+		// if readErr != nil {
+		// 	err = readErr
+		// 	break
+		// }
 	}
 
 	return err
