@@ -8,21 +8,16 @@ import (
 	"time"
 )
 
-func getConnections(addr string) error {
-
-	return nil
-}
-
 func TestEcho(t *testing.T) {
 
 }
 func TestProxy(t *testing.T) {
 
-	// client --> proxy --> upstream
-	// client <-- proxy <-- upstream
-
+	testMessage := []byte("This is Test \n")
 	upatreamAddress := "127.0.0.1:9000"
 	proxyAddress := "127.0.0.1:9001"
+
+	// USER CLIENT <<===>> PROXY SERVER/CLIENT(127.0.0.1:9001) <<===>> UPSTREAM SERVER : (127.0.0.1:9000)
 
 	requestC := make(chan []byte)
 	responseC := make(chan []byte)
@@ -31,7 +26,6 @@ func TestProxy(t *testing.T) {
 	responseP := make(chan []byte)
 
 	// Upstream Server
-	// upstreamServer := make(chan net.Conn)
 	u, err := testutils.TcpEchoServer(upatreamAddress, nil)
 	if err != nil || u == nil {
 		t.Error(err)
@@ -39,8 +33,8 @@ func TestProxy(t *testing.T) {
 	}
 
 	// Proxy Server
-	proxyServer := make(chan net.Conn)
-	p, err := testutils.TcpServer(proxyAddress, proxyServer)
+	proxyServerConnectionChannel := make(chan net.Conn)
+	p, err := testutils.TcpServer(proxyAddress, proxyServerConnectionChannel)
 	if err != nil || p == nil {
 		t.Error(err)
 		return
@@ -60,13 +54,22 @@ func TestProxy(t *testing.T) {
 		return
 	}
 
-	from := <-proxyServer
+	proxyServer := <-proxyServerConnectionChannel
 
-	proxy(proxyClient, from, time.Second*100)
-	proxy(from, proxyClient, time.Second*100)
+	// Proxy TO <--> FROM
+	proxy(proxyClient, proxyServer, time.Second*100)
+	proxy(proxyServer, proxyClient, time.Second*100)
 
-	requestP <- []byte("This is Test \n")
+	// Send Message from client to Proxy
+	requestP <- testMessage
+
+	// Recieved Message Sent From Echo Server, Proxied from Proxy server
 	resp := <-responseP
+
+	if string(testMessage) != string(resp) {
+		t.Errorf("Sent Recieved Message Missmatch , %s , %s", string(testMessage), string(resp))
+	}
+
 	fmt.Println(string(resp))
 
 }
