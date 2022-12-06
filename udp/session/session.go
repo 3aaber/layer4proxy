@@ -3,43 +3,11 @@ package session
 import (
 	"fmt"
 	"net"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"layer4proxy/core"
 )
-
-const (
-	UDP_PACKET_SIZE   = 65507
-	MAX_PACKETS_QUEUE = 10000
-)
-
-var bufferPool = sync.Pool{
-	New: func() interface{} {
-		return make([]byte, UDP_PACKET_SIZE)
-	},
-}
-
-type payload struct {
-	buffer []byte
-	length int
-}
-
-func (p payload) buf() []byte {
-	if p.buffer == nil {
-		return nil
-	}
-
-	return p.buffer[0:p.length]
-}
-
-func (p payload) release() {
-	if p.buffer == nil {
-		return
-	}
-	bufferPool.Put(p.buffer)
-}
 
 type Session struct {
 	sent uint64
@@ -72,8 +40,8 @@ func NewSession(clientAddr *net.UDPAddr, conn net.Conn, backend core.Upstream, c
 		var t *time.Timer
 		var tC <-chan time.Time
 
-		if cfg.ClientTimeout > 0 {
-			t = time.NewTimer(cfg.ClientTimeout)
+		if cfg.ClientIdleTimeout > 0 {
+			t = time.NewTimer(cfg.ClientIdleTimeout)
 			tC = t.C
 		}
 
@@ -87,7 +55,7 @@ func NewSession(clientAddr *net.UDPAddr, conn net.Conn, backend core.Upstream, c
 					if !t.Stop() {
 						<-t.C
 					}
-					t.Reset(cfg.ClientTimeout)
+					t.Reset(cfg.ClientIdleTimeout)
 				}
 
 				if pkt.buffer == nil {
@@ -153,11 +121,6 @@ func (s *Session) Write(buf []byte) error {
 	return nil
 }
 
-/**
- * ListenResponses waits for responses from backend, and sends them back to client address via
- * server connection, so that client is not confused with source host:port of the
- * packet it receives
- */
 func (s *Session) ListenResponses(sendTo *net.UDPConn) {
 
 	go func() {
