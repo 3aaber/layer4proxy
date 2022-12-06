@@ -1,8 +1,16 @@
 package session
 
+import "sync"
+
 type payload struct {
 	buffer []byte
 	length int
+}
+
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, UDP_PACKET_SIZE)
+	},
 }
 
 func (p payload) buf() []byte {
