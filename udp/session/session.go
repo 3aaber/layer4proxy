@@ -34,27 +34,29 @@ func NewSession(clientAddr *net.UDPAddr, conn net.Conn, backend core.Upstream, c
 		outputC:    make(chan payload, MAX_PACKETS_QUEUE),
 		stopC:      make(chan struct{}, 1),
 	}
+
 	s.closeChannelLoop()
 	s.writeLoop()
-
-	go func() {
-
-		var t *time.Timer
-		var tC <-chan time.Time
-
-		if cfg.ClientIdleTimeout > 0 {
-			t = time.NewTimer(cfg.ClientIdleTimeout)
-			tC = t.C
-		}
-
-		for range tC {
-			s.Close()
-		}
-	}()
+	s.closeLoop()
 
 	return s
 }
 
+func (s *Session) closeLoop() {
+	go func() {
+
+		var t *time.Timer
+
+		if s.cfg.ClientIdleTimeout > 0 {
+			t = time.NewTimer(s.cfg.ClientIdleTimeout)
+		}
+
+		for range t.C {
+			s.Close()
+		}
+	}()
+
+}
 func (s *Session) writeLoop() {
 
 	var t *time.Timer
