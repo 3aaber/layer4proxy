@@ -34,6 +34,8 @@ func NewSession(clientAddr *net.UDPAddr, conn net.Conn, backend core.Upstream, c
 		outputC:    make(chan payload, MAX_PACKETS_QUEUE),
 		stopC:      make(chan struct{}, 1),
 	}
+	s.closeChannelLoop()
+	s.writeLoop()
 
 	go func() {
 
@@ -45,65 +47,86 @@ func NewSession(clientAddr *net.UDPAddr, conn net.Conn, backend core.Upstream, c
 			tC = t.C
 		}
 
-		for {
-			select {
-
-			case <-tC:
-				s.Close()
-			case pkt := <-s.outputC:
-				if t != nil {
-					if !t.Stop() {
-						<-t.C
-					}
-					t.Reset(cfg.ClientIdleTimeout)
-				}
-
-				if pkt.buffer == nil {
-					panic("Program error, output channel should not be closed here")
-				}
-
-				n, err := s.connection.Write(pkt.buf())
-				pkt.release()
-
-				if err != nil {
-					fmt.Printf("Could not write data to udp connection: %v", err)
-					break
-				}
-
-				if n != pkt.length {
-					fmt.Printf("Short write error: should write %d bytes, but %d written", pkt.length, n)
-					break
-				}
-
-				if s.cfg.MaximumRequests > 0 && atomic.AddUint64(&s.sent, 1) > s.cfg.MaximumRequests {
-					fmt.Printf("Restricted to send more UDP packets")
-					break
-				}
-			case <-s.stopC:
-				atomic.StoreUint32(&s.stopped, 1)
-				if t != nil {
-					t.Stop()
-				}
-				s.connection.Close()
-
-				// drain output packets channel and free buffers
-				for {
-					select {
-					case pkt := <-s.outputC:
-						pkt.release()
-					default:
-						return
-					}
-				}
-
-			}
+		for range tC {
+			s.Close()
 		}
-
 	}()
 
 	return s
 }
 
+func (s *Session) writeLoop() {
+
+	var t *time.Timer
+
+	if s.cfg.ClientIdleTimeout > 0 {
+		t = time.NewTimer(s.cfg.ClientIdleTimeout)
+	}
+
+	go func() {
+		for pkt := range s.outputC {
+
+			if t != nil {
+				if !t.Stop() {
+					<-t.C
+				}
+				t.Reset(s.cfg.ClientIdleTimeout)
+			}
+
+			if pkt.buffer == nil {
+				panic("Program error, output channel should not be closed here")
+			}
+
+			n, err := s.connection.Write(pkt.buf())
+			pkt.release()
+
+			if err != nil {
+				fmt.Printf("Could not write data to udp connection: %v", err)
+				break
+			}
+
+			if n != pkt.length {
+				fmt.Printf("Short write error: should write %d bytes, but %d written", pkt.length, n)
+				break
+			}
+
+			if s.cfg.MaximumRequests > 0 && atomic.AddUint64(&s.sent, 1) > s.cfg.MaximumRequests {
+				fmt.Printf("Restricted to send more UDP packets")
+				break
+			}
+		}
+	}()
+}
+
+func (s *Session) closeChannelLoop() {
+
+	var t *time.Timer
+
+	if s.cfg.ClientIdleTimeout > 0 {
+		t = time.NewTimer(s.cfg.ClientIdleTimeout)
+	}
+	go func() {
+		for range s.stopC {
+
+			atomic.StoreUint32(&s.stopped, 1)
+			if t != nil {
+				t.Stop()
+			}
+			s.connection.Close()
+
+			// drain output packets channel and free buffers
+			for {
+				select {
+				case pkt := <-s.outputC:
+					pkt.release()
+				default:
+					return
+				}
+			}
+		}
+
+	}()
+}
 func (s *Session) Write(buf []byte) error {
 	if atomic.LoadUint32(&s.stopped) == 1 {
 		return fmt.Errorf("closed session")
