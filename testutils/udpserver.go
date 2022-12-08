@@ -36,7 +36,9 @@ func UDPServer(ip string, port int, messageChanel chan MessageRecieved) (net.Lis
 		if err != nil {
 			fmt.Println(err.Error())
 		}
-		messageChanel <- message
+		if messageChanel != nil {
+			messageChanel <- message
+		}
 
 	}
 }
