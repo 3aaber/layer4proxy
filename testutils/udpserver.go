@@ -5,7 +5,15 @@ import (
 	"net"
 )
 
-func UDPServer(ip string, port int, connChan chan net.Conn) (net.Listener, error) {
+const UDP_PACKET_SIZE = 65507
+
+type MessageRecieved struct {
+	Addr    *net.UDPAddr
+	Message []byte
+	Size    int
+}
+
+func UDPServer(ip string, port int, messageChanel chan MessageRecieved) (net.Listener, error) {
 
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{
 		Port: port,
@@ -19,11 +27,16 @@ func UDPServer(ip string, port int, connChan chan net.Conn) (net.Listener, error
 	fmt.Printf("server listening %s\n", conn.LocalAddr().String())
 
 	for {
-		message := make([]byte, 20)
-		_, _, err := conn.ReadFromUDP(message[:])
+		message := MessageRecieved{
+			Addr:    &net.UDPAddr{},
+			Message: make([]byte, UDP_PACKET_SIZE),
+		}
+		message.Size, message.Addr, err = conn.ReadFromUDP(message.Message[:])
+
 		if err != nil {
 			fmt.Println(err.Error())
 		}
+		messageChanel <- message
 
 	}
 }
