@@ -54,9 +54,11 @@ func (s *Session) closeLoop() {
 		for range t.C {
 			s.Close()
 		}
+
 	}()
 
 }
+
 func (s *Session) writeLoop() {
 
 	var t *time.Timer
