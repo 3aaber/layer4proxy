@@ -24,12 +24,12 @@ type Session struct {
 	stopped uint32
 }
 
-func NewSession(clientAddr *net.UDPAddr, conn net.Conn, backend core.Upstream, cfg Config) *Session {
+func NewSession(clientAddr *net.UDPAddr, backEndConnection net.Conn, backend core.Upstream, cfg Config) *Session {
 
 	s := &Session{
 		cfg:        cfg,
 		clientAddr: clientAddr,
-		connection: conn,
+		connection: backEndConnection,
 		backend:    backend,
 		outputC:    make(chan payload, MAX_PACKETS_QUEUE),
 		stopC:      make(chan struct{}, 1),
