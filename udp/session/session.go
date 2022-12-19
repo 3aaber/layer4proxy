@@ -15,24 +15,24 @@ type Session struct {
 
 	cfg Config
 
-	clientAddr *net.UDPAddr
-	connection net.Conn
-	backend    core.Upstream
+	clientAddr        *net.UDPAddr
+	backendConnection net.Conn
+	backendAddress    core.Upstream
 
 	outputC chan payload
 	stopC   chan struct{}
 	stopped uint32
 }
 
-func NewSession(clientAddr *net.UDPAddr, backEndConnection net.Conn, backend core.Upstream, cfg Config) *Session {
+func NewSession(clientAddr *net.UDPAddr, backEndConnection net.Conn, backendAddress core.Upstream, cfg Config) *Session {
 
 	s := &Session{
-		cfg:        cfg,
-		clientAddr: clientAddr,
-		connection: backEndConnection,
-		backend:    backend,
-		outputC:    make(chan payload, MAX_PACKETS_QUEUE),
-		stopC:      make(chan struct{}, 1),
+		cfg:               cfg,
+		clientAddr:        clientAddr,
+		backendConnection: backEndConnection,
+		backendAddress:    backendAddress,
+		outputC:           make(chan payload, MAX_PACKETS_QUEUE),
+		stopC:             make(chan struct{}, 1),
 	}
 
 	s.closeChannelLoop()
@@ -81,7 +81,7 @@ func (s *Session) writeLoop() {
 				panic("Program error, output channel should not be closed here")
 			}
 
-			n, err := s.connection.Write(pkt.buf())
+			n, err := s.backendConnection.Write(pkt.buf())
 			pkt.release()
 
 			if err != nil {
@@ -116,7 +116,7 @@ func (s *Session) closeChannelLoop() {
 			if t != nil {
 				t.Stop()
 			}
-			s.connection.Close()
+			s.backendConnection.Close()
 
 			// drain output packets channel and free buffers
 			for {
@@ -158,10 +158,10 @@ func (s *Session) ListenResponses(sendTo *net.UDPConn) {
 		for {
 
 			if s.cfg.BackendIdleTimeout > 0 {
-				s.connection.SetReadDeadline(time.Now().Add(s.cfg.BackendIdleTimeout))
+				s.backendConnection.SetReadDeadline(time.Now().Add(s.cfg.BackendIdleTimeout))
 			}
 
-			n, err := s.connection.Read(b)
+			n, err := s.backendConnection.Read(b)
 
 			if err != nil {
 				if err, ok := err.(net.Error); ok && err.Timeout() {

@@ -9,7 +9,7 @@ func UDPEchoServer(ip string, port int, messageChanel chan MessageRecieved) (net
 
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{
 		Port: port,
-		IP:   []byte(ip),
+		IP:   net.ParseIP(ip),
 	})
 	if err != nil {
 		panic(err)
